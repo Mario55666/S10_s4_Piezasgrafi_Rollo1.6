@@ -384,7 +384,7 @@ footer.site .src{font-size:12px;color:var(--mute);margin-top:6px}
 .errlist li.okitem::before{background:var(--ok);content:'✓'}
 .errlist li.obs::before{background:#c77700}
 
-.rform{display:grid;grid-template-columns:1fr 1fr 160px 180px auto;gap:12px;align-items:end;background:var(--paper);border:1px solid var(--line);padding:16px}
+.rform{display:grid;grid-template-columns:1fr 1fr 1.3fr auto;gap:12px;align-items:end;background:var(--paper);border:1px solid var(--line);padding:16px}
 .rform label{display:flex;flex-direction:column;gap:4px;font:600 10.5px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
 .rform input{font:14px var(--sans);color:var(--ink);border:1px solid var(--line);padding:8px 10px;text-transform:none;letter-spacing:0}
 .rform .btn{padding:11px 18px;font-size:14px}
@@ -1004,8 +1004,7 @@ footer.site .src{font-size:12px;color:var(--mute);margin-top:6px}
     <div class="rform">
       <label>Nombres<input id="rNom" autocomplete="given-name"></label>
       <label>Apellidos<input id="rApe" autocomplete="family-name"></label>
-      <label>Código (opcional)<input id="rCod"></label>
-      <label>Sección o turno (opcional)<input id="rSec"></label>
+      <label>Correo electrónico institucional<input id="rMail" type="email" autocomplete="email" inputmode="email" placeholder="usuario@institucion.edu.pe" required></label>
       <button class="btn primary" id="rBtn">Generar reporte PDF</button>
     </div>
     <p class="rmsg" id="rMsg" aria-live="polite"></p>
@@ -1440,16 +1439,16 @@ async function errComposite(){ const base=await imgOf($('#errBase').src); const 
 function syncStudent(){ const full=[$('#rNom').value.trim(),$('#rApe').value.trim()].filter(Boolean).join(' '); const h=document.querySelector('#fichaHead input[data-h="3"]'); if(h) h.value=full; const f=document.querySelector('.firmas input'); if(f) f.value=full; }
 ['#rNom','#rApe'].forEach(id=>$(id).addEventListener('input',syncStudent));
 async function buildPDF(){
-  const nom=$('#rNom').value.trim(), ape=$('#rApe').value.trim(); if(!nom||!ape) throw new Error('Escribir nombres y apellidos del estudiante.');
+  const nom=$('#rNom').value.trim(), ape=$('#rApe').value.trim(); if(!nom||!ape) throw new Error('Escribir nombres y apellidos del estudiante.'); const mailV=$('#rMail').value.trim(); if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mailV)) throw new Error('Escribir un correo electrónico institucional válido.');
   await ensurePDF(); const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'}); const PW=210,M=15,CW=PW-2*M; const blue=[31,111,181],ink=[21,24,28],mute=[91,99,109];
   const today=new Date(), fecha=today.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'}); const hv=i=>document.querySelector(`#fichaHead input[data-h="${i}"]`)?.value||''; const student=`${nom} ${ape}`;
   const logo=await imgOf($('.nav .brand img').src); doc.addImage(logo,'PNG',M,12,58,58*logo.naturalHeight/logo.naturalWidth);
   doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...ink); doc.text('Reporte de control de calidad',PW-M,18,{align:'right'});
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...mute); doc.text(PDFT('Gran formato eco-solvente · Epson SureColor S60600L'),PW-M,24,{align:'right'}); doc.text(PDFT('GP-GF-01 · Anexos A y B · emitido el '+fecha),PW-M,29,{align:'right'});
   doc.setDrawColor(...blue); doc.setLineWidth(0.8); doc.line(M,37,PW-M,37);
-  const code=$('#rCod').value.trim(), secc=$('#rSec').value.trim();
+  const mail=$('#rMail').value.trim();
   doc.autoTable({startY:41,margin:{left:M,right:M},theme:'grid',styles:{fontSize:8.5,cellPadding:1.8,textColor:ink,lineColor:[197,202,208]},columnStyles:{0:{cellWidth:42,fontStyle:'bold',fillColor:[236,238,240]}},
-    body:[['Estudiante',student+(code?'  ·  Código: '+code:'')+(secc?'  ·  '+secc:'')],['Institución',hv(0)],['Unidad didáctica',hv(1)],['Docente',hv(2)],['Pieza',hv(4)],['Técnica',hv(5)],['Archivo verificado',hv(6)],['Origen',hv(7)]].map(r=>r.map(PDFT))});
+    body:[['Estudiante',student],['Correo institucional',mail],['Institución',hv(0)],['Unidad didáctica',hv(1)],['Docente',hv(2)],['Pieza',hv(4)],['Técnica',hv(5)],['Archivo verificado',hv(6)],['Origen',hv(7)]].map(r=>r.map(PDFT))});
   let y=doc.lastAutoTable.finalY+5;
   const sum=PDFT($('#fichaSum').textContent); const anexoOk=/APTO/.test(sum)&&!/NO APTO/.test(sum); const vF=lastMeasure?lastMeasure.checks.filter(c=>c[2]===false):[]; const apto=anexoOk&&vF.length===0;
   const lines=[]; if(lastMeasure) lines.push(vF.length?`Verificador: ${lastMeasure.name} presenta ${vF.length} desviación(es): ${vF.map(c=>c[0]).join(', ')}.`:`Verificador: ${lastMeasure.name} sin desviaciones medibles.`);
