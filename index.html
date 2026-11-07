@@ -384,6 +384,7 @@ footer.site .src{font-size:12px;color:var(--mute);margin-top:6px}
 .errlist li.okitem::before{background:var(--ok);content:'✓'}
 .errlist li.obs::before{background:#c77700}
 
+.rbtns{display:flex;gap:8px;flex-wrap:wrap}
 .rform{display:grid;grid-template-columns:1fr 1fr 1.3fr auto;gap:12px;align-items:end;background:var(--paper);border:1px solid var(--line);padding:16px}
 .rform label{display:flex;flex-direction:column;gap:4px;font:600 10.5px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
 .rform input{font:14px var(--sans);color:var(--ink);border:1px solid var(--line);padding:8px 10px;text-transform:none;letter-spacing:0}
@@ -1005,7 +1006,7 @@ footer.site .src{font-size:12px;color:var(--mute);margin-top:6px}
       <label>Nombres<input id="rNom" autocomplete="given-name"></label>
       <label>Apellidos<input id="rApe" autocomplete="family-name"></label>
       <label>Correo electrónico institucional<input id="rMail" type="email" autocomplete="email" inputmode="email" placeholder="usuario@institucion.edu.pe" required></label>
-      <button class="btn primary" id="rBtn">Generar reporte PDF</button>
+      <div class="rbtns"><button class="btn primary" id="rBtn" type="button">Generar reporte PDF</button><button class="btn" id="rMdBtn" type="button">Descargar reporte Markdown</button></div>
     </div>
     <p class="rmsg" id="rMsg" aria-live="polite"></p>
   </div>
@@ -1516,9 +1517,43 @@ window.__gfApplyCourse=(d)=>{ window.__gfResetCourse(); const ch=[]; const N=v=>
   const hpost=MEDIA.map(m=>m.post).filter(Boolean); if(ch.some(c=>/post-calentador/.test(c[0]))){ const r=row('heat'); r.min=Math.min(30,...hpost); r.max=Math.max(55,...hpost); r.ref=`${r.min}–${r.max} °C`; r.src='Curso'; }
   if(ch.some(c=>/resolución mínima/.test(c[0]))) row('ppi').src='Curso';
   const meta=d._meta||{}; window.__gfCourse={cuaderno:meta.cuaderno||'',fecha:meta.fecha||new Date().toISOString(),n:ch.length,notas:d.notas||''}; refreshRefs(); return ch; };
+
+/* ===== Reporte en Markdown ===== */
+function buildMD(){
+  const nom=$('#rNom').value.trim(), ape=$('#rApe').value.trim(), mail=$('#rMail').value.trim();
+  if(!nom||!ape) throw new Error('Escribir nombres y apellidos del estudiante.');
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail)) throw new Error('Escribir un correo electrónico institucional válido.');
+  const cell=s=>String(s??'').replace(/\|/g,'/').replace(/\s*\n\s*/g,' ').trim()||'—';
+  const hv=i=>document.querySelector(`#fichaHead input[data-h="${i}"]`)?.value||'';
+  const today=new Date(); const sum=$('#fichaSum').textContent.trim(); const anexoOk=/APTO/.test(sum)&&!/NO APTO/.test(sum);
+  const vF=lastMeasure?lastMeasure.checks.filter(c=>c[2]===false):[]; const apto=anexoOk&&vF.length===0; const L=[];
+  L.push('# Reporte de control de calidad · Gran formato','','Epson SureColor S60600L · GP-GF-01 · Anexos A y B · emitido el '+today.toLocaleDateString('es-PE'),'',
+    '| Campo | Valor |','|---|---|',...[['Estudiante',`${nom} ${ape}`],['Correo institucional',mail],['Institución',hv(0)],['Unidad didáctica',hv(1)],['Docente',hv(2)],['Pieza',hv(4)],['Técnica',hv(5)],['Archivo verificado',hv(6)],['Origen',hv(7)]].map(r=>`| ${r[0]} | ${cell(r[1])} |`),'',
+    `## Dictamen: ${apto?'APTO':'NO APTO'}`,'');
+  if(lastMeasure) L.push(vF.length?`- Verificador: ${lastMeasure.name} presenta ${vF.length} desviación(es): ${vF.map(c=>c[0]).join(', ')}.`:`- Verificador: ${lastMeasure.name} sin desviaciones medibles.`);
+  L.push('- Anexo A: '+cell(sum));
+  L.push(window.__gfCourse?`- Valores de referencia: cuaderno NotebookLM ${window.__gfCourse.cuaderno||''} importado el ${String(window.__gfCourse.fecha||'').slice(0,10)} (${window.__gfCourse.n} valores).`:'- Valores de referencia: ficha Epson Perú; temperaturas de la hoja de especificaciones S60600. Cuaderno del curso no importado.');
+  L.push('','## 1. Arte verificado','','| Campo | Valor |','|---|---|',...[['Soporte',$('#pSub').textContent],['Formato',$('#pFmt').textContent],['Origen',$('#pOrig').textContent],['TAC',$('#pTac').textContent],['Panelado',$('#pTile').textContent]].map(r=>`| ${r[0]} | ${cell(r[1])} |`));
+  const errs=[...document.querySelectorAll('#errList li')];
+  L.push('','## 2. Errores detectados en el arte','','| N.° | Parámetro | Medición | Corrección |','|---|---|---|---|',...errs.map((li,i)=>`| ${li.classList.contains('okitem')?'OK':i+1} | ${cell(li.querySelector('b')?.textContent)} | ${cell(li.querySelector('span')?.textContent)} | ${cell(li.querySelector('em')?.textContent)} |`));
+  if(lastMeasure) L.push('','## 3. Resultado del verificador de archivo','','| Parámetro | Valor medido | Nota | Estado |','|---|---|---|---|',...lastMeasure.checks.map(c=>`| ${cell(c[0])} | ${cell(c[1])} | ${cell(c[3])} | ${c[2]===true?'Conforme':c[2]===false?'Desviación':'Observación'} |`));
+  L.push('','## Anexo A · Ficha técnica de verificación','','| Parámetro | Referencia | Fuente | Medido | Desviación | Corrección | Final | Conforme |','|---|---|---|---|---|---|---|---|');
+  ROWS.forEach(r=>{ const tr=$(`#ficha tr[data-k="${r.k}"]`); if(!tr) return; const g=f=>tr.querySelector(`[data-f="${f}"]`)?.value||''; const ok=r.type==='sel'?(g('ok')||'pendiente'):(tr.querySelector('[data-o="ok"]')?.textContent||'pendiente');
+    L.push(`| ${cell(r.p)} | ${cell(r.ref)} | ${cell(r.src)} | ${cell(g('v1'))} | ${cell(tr.querySelector('[data-o="d1"]')?.textContent)} | ${cell(g('corr'))} | ${cell(g('fin'))} | ${cell(ok)} |`); });
+  L.push('',`**${cell(sum)}**`,'','## Anexo B · Checklist de verificación previa y producción','','| Bloque | Ítem | Referencia | Estado |','|---|---|---|---|');
+  CL.forEach((s,si)=>s.i.forEach(([t,r],i)=>{ const cb=document.getElementById(`cl${si}_${i}`); L.push(`| ${cell(s.t)} | ${cell(t)} | ${cell(r)} | ${cb&&cb.checked?'Verificado':'Pendiente'} |`); }));
+  L.push('','## Firmas','','| Estudiante | Docente |','|---|---|',`| ${nom} ${ape} | ${cell(hv(2))} |`,'','---','Mg. Mario Quiroz Martínez 2026 — Unidad didáctica de Producción y publicación de piezas gráficas');
+  const safe=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
+  return {text:L.join('\n'),filename:`Reporte_CC_GF_${safe(ape)}_${safe(nom)}_${today.toISOString().slice(0,10)}.md`}; }
+$('#rMdBtn').addEventListener('click',async()=>{ const msg=$('#rMsg'); msg.className='rmsg';
+  try{ const {text,filename}=buildMD(); const blob=new Blob([text],{type:'text/markdown'}); const dl=window.claude&&window.claude.use?await window.claude.use('downloads').catch(()=>null):null;
+    if(dl) await dl.save({filename,data:blob});
+    else{ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000); }
+    msg.className='rmsg ok'; msg.textContent=`Reporte descargado: ${filename}`; }
+  catch(e){ msg.className='rmsg warn'; msg.textContent=e&&e.code==='declined'?'Descarga cancelada.':(e&&e.message)||'No se pudo generar el reporte.'; } });
 $('#rBtn').addEventListener('click',async()=>{ const msg=$('#rMsg'),btn=$('#rBtn'); msg.className='rmsg'; msg.textContent='Generando reporte…'; btn.disabled=true;
-  try{ const {blob,filename}=await buildPDF(); const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;
-    if(!dl){ msg.className='rmsg warn'; msg.textContent=`Reporte generado (${filename}), pero la descarga no está disponible en esta vista. Abrir el artefacto en claude.ai.`; return; }
+  try{ const {blob,filename}=await buildPDF(); const dl=window.claude&&window.claude.use?await window.claude.use('downloads').catch(()=>null):null;
+    if(!dl){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000); msg.className='rmsg ok'; msg.textContent=`Reporte descargado: ${filename}`; return; }
     await dl.save({filename,data:blob}); msg.className='rmsg ok'; msg.textContent=`Reporte descargado: ${filename}`; }
   catch(e){ msg.className='rmsg warn'; msg.textContent=e&&e.code==='declined'?'Descarga cancelada.':e&&e.code==='rate_limited'?'Hay una descarga pendiente; intentar de nuevo.':(e&&e.message)||'No se pudo generar el reporte.'; }
   finally{ btn.disabled=false; } });
